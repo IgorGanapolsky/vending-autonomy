@@ -1,0 +1,19 @@
+name: Daily Supplier Outreach
+on:
+  schedule:
+    - cron: '0 14 * * *'   # 10 AM EDT daily
+jobs:
+  outreach:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with: python-version: '3.10'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run supplier outreach
+        run: python supplier_outreach.py
+        env:
+          ZOHO_SMTP_USER: ${{ secrets.ZOHO_SMTP_USER }}
+          ZOHO_SMTP_PASS: ${{ secrets.ZOHO_SMTP_PASS }}
