@@ -3,12 +3,11 @@
 Find local Broward‐County vending machine providers
 offering “free placement” and send them your 30% revenue‐share pitch.
 """
-
-import requests
 from bs4 import BeautifulSoup
 import csv
 import os
 from utils.mailer import send_email
+from security import safe_requests
 
 # ----- CONFIG -----
 COMMISSION_SPLIT = "30%"
@@ -25,7 +24,7 @@ DISTRIBUTOR_SITES = [
 
 def fetch_offers(url):
     """Return list of (company, contact_email, details_url)."""
-    resp = requests.get(url, timeout=10)
+    resp = safe_requests.get(url, timeout=10)
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "html.parser")
     offers = []
