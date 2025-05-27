@@ -1,130 +1,88 @@
 #!/usr/bin/env python3
 """
-Generate and send revenue-share vending contracts via DocuSign.
+Generate a PDF revenue-share vending agreement and email it automatically via Zoho SMTP.
 """
-
 import os
 import sys
-import base64
-from docusign_esign import ApiClient, EnvelopesApi
-from docusign_esign.models import (
-    EnvelopeDefinition, Document, Signer, SignHere, Tabs, Recipients
+from datetime import datetime
+from fpdf import FPDF
+import utils.mailer as mailer
+
+# Config: read from environment
+SMTP_USER = os.getenv("ZOHO_SMTP_USER")
+SMTP_PASS = os.getenv("ZOHO_SMTP_PASS")
+FROM_EMAIL = SMTP_USER
+TO_EMAIL = os.getenv("CONTRACT_RECIPIENT", SMTP_USER)  # default to self if not set
+
+DEFAULT_COMMISSION = "30%"
+
+PDF_TEMPLATE = (
+    "REVENUE-SHARE VENDING AGREEMENT\n\n"
+    "Date: {date}\n"
+    "Operator: Igor Ganapolsky\n"
+    "Supplier: {supplier_name}\n"
+    "\n"
+    "1. Placement & Maintenance\n"
+    "   Operator will place and service vending machines at locations provided by Supplier.\n"
+    "2. Revenue Share\n"
+    "   Operator receives {commission} of net sales from machines placed.\n"
+    "3. Term & Termination\n"
+    "   Agreement starts on date above and may be ended by either party with 30 days notice.\n"
 )
 
-# ----- CONFIGURATION (set these as GitHub Secrets or env vars) -----
-# Your DocuSign integration key (Client ID)
-DS_INTEGRATOR_KEY = os.getenv("DS_INTEGRATOR_KEY")
-# The user ID to impersonate (GUID)
-DS_IMPERSONATED_USER_ID = os.getenv("DS_IMPERSONATED_USER_ID")
-# OAuth base path (e.g., account-d.docusign.com)
-DS_OAUTH_SERVER = os.getenv("DS_OAUTH_SERVER", "account-d.docusign.com")
-# Your RSA private key, PEM format, with newline escapes
-DS_PRIVATE_KEY = os.getenv("DS_PRIVATE_KEY")
-# Your DocuSign account ID
-DS_ACCOUNT_ID = os.getenv("DS_ACCOUNT_ID")
 
-# Revenue-share terms
-default_commission = "30%"
-
-
-def authenticate() -> ApiClient:
+def generate_pdf(supplier_name: str, commission: str) -> str:
     """
-    Authenticate via JWT and return a configured ApiClient.
+    Generate a PDF agreement and return the filepath.
     """
-    api_client = ApiClient()
-    api_client.set_oauth_host_name(DS_OAUTH_SERVER)
-    token_response = api_client.request_jwt_user_token(
-        client_id=DS_INTEGRATOR_KEY,
-        user_id=DS_IMPERSONATED_USER_ID,
-        oauth_host_name=DS_OAUTH_SERVER,
-        private_key_bytes=DS_PRIVATE_KEY.encode("utf-8"),
-        expires_in=3600
+    date_str = datetime.utcnow().strftime("%Y-%m-%d")
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    text = PDF_TEMPLATE.format(
+        date=date_str,
+        supplier_name=supplier_name,
+        commission=commission
     )
-    access_token = token_response.access_token
-    api_client.host = f"https://{DS_OAUTH_SERVER}/restapi"
-    api_client.set_default_header("Authorization", f"Bearer {access_token}")
-    return api_client
+    for line in text.split("\n"):
+        pdf.multi_cell(0, 8, line)
+    filename = f"agreement_{supplier_name.replace(' ', '_')}_{date_str}.pdf"
+    pdf.output(filename)
+    return filename
 
 
-def send_contract(supplier_name: str, supplier_email: str, commission: str = default_commission):
+def send_contract(supplier_name: str, supplier_email: str, commission: str = DEFAULT_COMMISSION):
     """
-    Generate a simple txt contract and send it via DocuSign.
+    Generate PDF contract and email it via SMTP.
     """
-    # 1) Create the contract text
-    contract_text = f"""
-REVENUE-SHARE VENDING AGREEMENT
+    # 1) Generate PDF
+    pdf_file = generate_pdf(supplier_name, commission)
 
-This Agreement is made between Igor Ganapolsky (Operator) and {supplier_name} (Supplier).
-
-1. Placement & Maintenance
-Operator will place and supervise vending machines at locations provided by Supplier.
-
-2. Revenue Share
-Operator shall receive {commission} of net sales from all machines placed under this Agreement.
-
-3. Term & Termination
-This Agreement commences on the date of last signature and continues until terminated by either party with 30 days' notice.
-
-Operator Signature: ______________________   Date: _______________
-Supplier Signature: _____________________   Date: _______________
-"""
-    # 2) Write to a .txt file
-    filename = "contract.txt"
-    with open(filename, "w") as f:
-        f.write(contract_text)
-
-    # 3) Base64-encode the file
-    with open(filename, "rb") as f:
-        doc_b64 = base64.b64encode(f.read()).decode("ascii")
-
-    # 4) Build the envelope definition
-    envelope_def = EnvelopeDefinition(
-        email_subject="Please sign the revenue-share vending agreement",
-        documents=[
-            Document(
-                document_base64=doc_b64,
-                name="Revenue-Share Agreement.txt",
-                file_extension="txt",
-                document_id="1"
-            )
-        ],
-        recipients=Recipients(
-            signers=[
-                Signer(
-                    email=supplier_email,
-                    name=supplier_name,
-                    recipient_id="1",
-                    routing_order="1",
-                    tabs=Tabs(
-                        sign_here_tabs=[
-                            SignHere(
-                                document_id="1",
-                                page_number="1",
-                                recipient_id="1",
-                                tab_label="SignHere",
-                                x_position="200",
-                                y_position="600"
-                            )
-                        ]
-                    )
-                )
-            ]
-        ),
-        status="sent"
+    # 2) Email it
+    subject = f"Revenue-Share Agreement for {supplier_name}"
+    body = (
+        f"Hello {supplier_name},\n\n"
+        "Please find attached our revenue-share vending agreement. "
+        "Sign and return at your convenience!\n\n"
+        "Regards,\nIgor Ganapolsky"
     )
-
-    # 5) Authenticate and send
-    api_client = authenticate()
-    envelopes_api = EnvelopesApi(api_client)
-    summary = envelopes_api.create_envelope(
-        account_id=DS_ACCOUNT_ID,
-        envelope_definition=envelope_def
+    mailer.send_email(
+        smtp_user=SMTP_USER,
+        smtp_pass=SMTP_PASS,
+        from_addr=FROM_EMAIL,
+        to_addrs=[supplier_email],
+        subject=subject,
+        body=body,
+        attachments=[pdf_file]
     )
-    print(f"Envelope sent to {supplier_email}. Envelope ID: {summary.envelope_id}")
+    print(f"Contract emailed to {supplier_email}: {pdf_file}")
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: contract_manager.py <Supplier Name> <Supplier Email>")
+    if len(sys.argv) < 3:
+        print("Usage: contract_manager.py <Supplier Name> <Supplier Email> [commission]")
         sys.exit(1)
-    send_contract(sys.argv[1], sys.argv[2])
+    name = sys.argv[1]
+    email = sys.argv[2]
+    comm = sys.argv[3] if len(sys.argv) >= 4 else DEFAULT_COMMISSION
+    send_contract(name, email, comm)
