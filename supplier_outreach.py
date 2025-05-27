@@ -27,7 +27,6 @@ def discover_supplier_sites(query="free placement vending Broward County", num=1
             results.append(url)
     return results
 
-
 def fetch_offers(url):
     """
     Scrape a single page and return a list of
