@@ -12,9 +12,9 @@ from utils.mailer import send_email
 
 # ----- CONFIG -----
 COMMISSION_SPLIT = "30%"
-PRODUCT_FOCUS   = "snacks only"
-SMTP_USER       = os.getenv("ZOHO_SMTP_USER")
-SMTP_PASS       = os.getenv("ZOHO_SMTP_PASS")
+PRODUCT_FOCUS = "snacks only"
+SMTP_USER = os.getenv("ZOHO_SMTP_USER")
+SMTP_PASS = os.getenv("ZOHO_SMTP_PASS")
 
 
 def discover_supplier_sites(query="free placement vending Broward County", num=10):
@@ -22,7 +22,7 @@ def discover_supplier_sites(query="free placement vending Broward County", num=1
     Return a list of vending supplier URLs via Google Search.
     """
     results = []
-    for url in search(query, tld="com", lang="en", num_results=num):
+    for url in search(query, num_results=num):
         if "vending" in url.lower():
             results.append(url)
     return results
@@ -50,7 +50,7 @@ def fetch_offers(url):
 
 def main():
     # 1) Discover
-    sites  = discover_supplier_sites()
+    sites = discover_supplier_sites()
     offers = []
 
     # 2) Scrape each
