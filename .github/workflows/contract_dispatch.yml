@@ -1,0 +1,30 @@
+name: Contract Dispatch
+
+on:
+    workflow_dispatch:    # lets you run it manually from the Actions UI
+
+jobs:
+    send-contract:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v3
+
+            - name: Setup Python
+              uses: actions/setup-python@v4
+              with:
+                  python-version: '3.10'
+
+            - name: Install dependencies
+              run: pip install -r requirements.txt
+
+            - name: Send Test Contract
+              run: python contract_manager.py "Test Vendor" test@example.com
+              env:
+                  DS_INTEGRATOR_KEY:    ${{ secrets.DS_INTEGRATOR_KEY }}
+                  DS_IMPERSONATED_USER_ID: ${{ secrets.DS_IMPERSONATED_USER_ID }}
+                  DS_ACCOUNT_ID:        ${{ secrets.DS_ACCOUNT_ID }}
+                  DS_OAUTH_SERVER:      ${{ secrets.DS_OAUTH_SERVER }}
+                  DS_PRIVATE_KEY:       ${{ secrets.DS_PRIVATE_KEY }}
+                  ZOHO_SMTP_USER:       ${{ secrets.ZOHO_SMTP_USER }}
+                  ZOHO_SMTP_PASS:       ${{ secrets.ZOHO_SMTP_PASS }}
